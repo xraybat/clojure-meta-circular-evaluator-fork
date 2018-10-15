@@ -6,7 +6,7 @@
 ;; mistakes apply defined in eval for the Clojure one.
 (defn second-from-underlying-lisp [exp] (second exp))
 
-(declare second rest-of-second rest-after-second third rest-after-third flat-third fourth)
+(declare second rest-of-second rest-after-second third rest-after-third flat-third fourth second-from-underlying-lisp)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; routines to get information out of expressions

@@ -24,12 +24,13 @@
          if-predicate if-consequent if-alternative cond-predicate
          make-lambda make-begin expand-clauses
          prompt-for-input
-         the-global-environment announce-output user-print
+         announce-output user-print
           boolean? tagged-list?       cond-clauses
          cond-else-clause? primitive-implementation
            sequence->exp
          cond-actions make-if
-         true? false? apply-from-underlying-lisp)
+         true? false? apply-from-underlying-lisp
+         the-global-environment driver-loop)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; store apply from Clojure, we need it to apply primitive
@@ -38,6 +39,7 @@
 (defn apply-from-underlying-lisp [f args] (apply f args))
 (declare apply)                                             ;; our 'apply' used in 'eval'
 
+;; @TODO: split eval-apply.clj into eval.clj and apply.clj
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; eval
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -225,6 +227,7 @@
 (defn first-operand [args] (first args))
 (defn rest-operands [args] (rest args))
 
+;; @TODO: split eval-apply.clj into eval.clj and apply.clj
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; apply
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -248,14 +251,12 @@
 
 (defn compound-procedure? [p] (tagged-list? p 'procedure))
 (defn procedure-body [p] (stf/third p))
-
-
 (defn primitive-implementation [proc] (stf/second proc))
 (defn procedure-environment [p] (stf/fourth p))
+(defn procedure-parameters [p] (stf/second p))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn procedure-parameters [p] (stf/second p))                  ;; used below too
-
+;; @TODO: move to evaluator.clj namespace
+;; from here-->>
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; code to interact with the evaluator:
 (def input-prompt ";;; eval input:")
@@ -285,7 +286,5 @@
     (println object)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; meta-circular-evaluator loaded
-'METACIRCULAR-EVALUATOR-LOADED
 (def the-global-environment (env/setup-environment))
-(driver-loop)
+;; <<--to here
