@@ -1,65 +1,40 @@
-(ns eval-apply)
+(ns parser)
 
-;; from https://github.com/transducer/clojure-experiments/blob/master/meta-circular-experiments/mc-evaluator.clj
-
-(require '[second-third-fourth :as stf])
 (require '[environ :as env])
+(require '[eval :as e])
+(require '[second-third-fourth :as stf])
 (require '[error :as err])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; have to declare all defined stuff below on top (except eval and
-;; apply.
+;; declare all defined stuff below on top
 (declare self-evaluating? variable? lookup-variable-value quoted?
          assignment? definition? if? lambda? make-procedure begin?
          cond? application? text-of-quotation eval-assignment
          eval-definition eval-if eval-sequence lambda-parameters
          lambda-body val-sequence cond->if list-of-values
          operator operands begin-actions no-operands? first-operand
-         rest-operands primitive-procedure?
-         apply-primitive-procedure compound-procedure?
-         procedure-body  procedure-parameters
-         procedure-environment last-exp? first-exp rest-exps
+         rest-operands
+         last-exp? first-exp rest-exps
          set-variable-value! assignment-variable assignment-value
          define-variable! definition-variable definition-value
          if-predicate if-consequent if-alternative cond-predicate
          make-lambda make-begin expand-clauses
-         prompt-for-input
-         announce-output user-print
-          boolean? tagged-list?       cond-clauses
-         cond-else-clause? primitive-implementation
-           sequence->exp
+         boolean? tagged-list?       cond-clauses
+         cond-else-clause?
+         sequence->exp
          cond-actions make-if
-         true? false? apply-from-underlying-lisp
-         the-global-environment driver-loop)
+         true? false?
+         apply-from-underlying-lisp apply-primitive-procedure compound-procedure? procedure-body procedure-parameters
+         procedure-environment primitive-procedure? primitive-implementation)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; store apply from Clojure, we need it to apply primitive
 ;; procedures. And then declare it as well, otherwise Clojure
 ;; mistakes apply defined in eval for the Clojure one.
 (defn apply-from-underlying-lisp [f args] (apply f args))
-(declare apply)                                             ;; our 'apply' used in 'eval'
-
-;; @TODO: split eval-apply.clj into eval.clj and apply.clj
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; eval
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn eval [exp env]
-  (cond (self-evaluating? exp) exp
-        (variable? exp) (lookup-variable-value exp env)
-        (quoted? exp) (text-of-quotation exp)
-        (assignment? exp) (eval-assignment exp env)
-        (definition? exp) (eval-definition exp env)
-        (if? exp) (eval-if exp env)
-        (lambda? exp) (make-procedure (lambda-parameters exp)
-                                      (lambda-body exp)
-                                      env)
-        (begin? exp) (eval-sequence (begin-actions exp) env)
-        (cond? exp) (eval (cond->if exp) env)
-        (application? exp) (apply (eval (operator exp) env)
-                                  (list-of-values (operands exp) env))
-        :else (err/error "unknown expression type -- eval" exp)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; for my-eval
 (defn self-evaluating? [exp]
   (cond (number? exp) true
         (string? exp) true
@@ -104,30 +79,30 @@
 
 (defn eval-assignment [exp env]
   (set-variable-value! (assignment-variable exp)
-                       (eval (assignment-value exp) exp)
+                       (e/my-eval (assignment-value exp) exp)
                        env))
 
 (defn eval-definition [exp env]
   (let [definition-name (definition-variable exp)]
     (do
       (define-variable! definition-name
-                        (eval (definition-value exp) env)
+                        (e/my-eval (definition-value exp) env)
                         env)
       (str definition-name " defined"))))
 
 (defn eval-if [exp env]
-  (if (eval (if-predicate exp) env)
-    (eval (if-consequent exp) env)
-    (eval (if-alternative exp) env)))
+  (if (e/my-eval (if-predicate exp) env)
+    (e/my-eval (if-consequent exp) env)
+    (e/my-eval (if-alternative exp) env)))
 
 (defn make-procedure [parameters body env]
   (list 'procedure parameters body env))
 
 (defn eval-sequence [exps env]
   (if (last-exp? exps)
-    (eval (first-exp exps) env)
+    (e/my-eval (first-exp exps) env)
     (do
-      (eval (first-exp exps) env)
+      (e/my-eval (first-exp exps) env)
       (eval-sequence (rest-exps exps) env))))
 
 (defn cond->if [exp]
@@ -142,7 +117,7 @@
 (defn list-of-values [exps env]
   (if (no-operands? exps)
     '()
-    (cons (eval (first-operand exps) env)
+    (cons (e/my-eval (first-operand exps) env)
           (list-of-values (rest-operands exps) env))))
 
 (defn set-variable-value! [variable value env]
@@ -227,26 +202,12 @@
 (defn first-operand [args] (first args))
 (defn rest-operands [args] (rest args))
 
-;; @TODO: split eval-apply.clj into eval.clj and apply.clj
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; apply
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn apply [procedure arguments]
-  (cond (primitive-procedure? procedure)
-        (apply-primitive-procedure procedure arguments)
-        (compound-procedure? procedure)
-        (eval-sequence
-          (procedure-body procedure)
-          (env/extend-environment (procedure-parameters procedure)
-                              arguments
-                              (procedure-environment procedure)))
-        :else (err/error "unknown procedure type -- apply" procedure)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; for my-apply
 (defn primitive-procedure? [proc] (tagged-list? proc 'primitive))
 
 (defn apply-primitive-procedure [proc args]
-  (apply-from-underlying-lisp                               ;; note: lisp
+  (apply-from-underlying-lisp                               ;; note: underlying lisp
     (primitive-implementation proc) args))
 
 (defn compound-procedure? [p] (tagged-list? p 'procedure))
@@ -254,37 +215,3 @@
 (defn primitive-implementation [proc] (stf/second proc))
 (defn procedure-environment [p] (stf/fourth p))
 (defn procedure-parameters [p] (stf/second p))
-
-;; @TODO: move to evaluator.clj namespace
-;; from here-->>
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; code to interact with the evaluator:
-(def input-prompt ";;; eval input:")
-(def output-prompt ";;; eval value:")
-
-(defn driver-loop []
-  (prompt-for-input input-prompt)
-  (let [input (read)]
-    (user-print input)
-    (let [output (eval input the-global-environment)]
-      (announce-output output-prompt)
-      (user-print output)))
-  (driver-loop))
-
-(defn prompt-for-input [string]
-  (newline) (println string) (newline))
-
-(defn announce-output [string]
-  (newline) (println string) (newline))
-
-(defn user-print [object]
-  (if (compound-procedure? object)
-    (println (list 'compound-procedure
-                   (procedure-parameters object)
-                   (procedure-body object)
-                   '<procedure-env>))
-    (println object)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(def the-global-environment (env/setup-environment))
-;; <<--to here
