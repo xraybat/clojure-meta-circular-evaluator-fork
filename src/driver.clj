@@ -1,15 +1,15 @@
 (ns driver)
 
 (require '[environ :as env])
-(require '[parser :as p])
+;;(require '[parser :as p])
 (require '[eval :as e])
 
 (declare driver-loop the-global-environment prompt-for-input input-prompt output-prompt announce-output user-print)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; code to interact with the evaluator:
-(def input-prompt ";;; eval input:")
-(def output-prompt ";;; eval value:")
+(def input-prompt "@input")
+(def output-prompt "@value")
 
 (defn driver-loop []
   (prompt-for-input input-prompt)
@@ -27,10 +27,10 @@
   (newline) (println string) (newline))
 
 (defn user-print [object]
-  (if (p/compound-procedure? object)
+  (if (e/compound-procedure? object)
     (println (list 'compound-procedure
-                   (p/procedure-parameters object)
-                   (p/procedure-body object)
+                   (e/procedure-parameters object)
+                   (e/procedure-body object)
                    '<procedure-env>))
     (println object)))
 
