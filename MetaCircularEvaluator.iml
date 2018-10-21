@@ -8,5 +8,8 @@
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="library" name="Clojure-1.9.0" level="project" />
+    <orderEntry type="library" name="clojure-1.9.0" level="project" />
+    <orderEntry type="library" name="core.specs.alpha-0.1.24" level="project" />
+    <orderEntry type="library" name="spec.alpha-0.1.143" level="project" />
   </component>
 </module>
