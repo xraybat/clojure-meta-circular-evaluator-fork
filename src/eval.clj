@@ -9,11 +9,6 @@
 (require '[error :as err])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; eval and apply
-(declare my-eval)
-(declare my-apply)
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; declare all defined stuff below on top
 (declare self-evaluating? variable? lookup-variable-value quoted?
          assignment? definition? if? lambda? make-procedure begin?
@@ -27,7 +22,7 @@
          define-variable! definition-variable definition-value
          if-predicate if-consequent if-alternative cond-predicate
          make-lambda make-begin expand-clauses
-         boolean? tagged-list?       cond-clauses
+         boolean? tagged-list? cond-clauses
          cond-else-clause?
          sequence->exp
          cond-actions make-if
@@ -35,15 +30,18 @@
          apply-from-underlying-lisp apply-primitive-procedure compound-procedure? procedure-body procedure-parameters
          procedure-environment primitive-procedure? primitive-implementation)
 
+(declare driver-loop the-global-environment prompt-for-input input-prompt output-prompt announce-output user-print)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; store apply from Clojure, we need it to apply primitive
 ;; procedures. And then declare it as well, otherwise Clojure
 ;; mistakes apply defined in eval for the Clojure one.
 (defn apply-from-underlying-lisp [f args] (apply f args))
+(declare apply)                                             ;; needs to be here
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; my-eval
-(defn my-eval [exp env]
+;; eval
+(defn eval [exp env]
   (cond (self-evaluating? exp) exp
         (variable? exp) (lookup-variable-value exp env)
         (quoted? exp) (text-of-quotation exp)
@@ -54,14 +52,14 @@
                                       (lambda-body exp)
                                       env)
         (begin? exp) (eval-sequence (begin-actions exp) env)
-        (cond? exp) (my-eval (cond->if exp) env)
-        (application? exp) (my-apply (my-eval (operator exp) env)
-                                    (list-of-values (operands exp) env))
-        :else (err/error "unknown expression type -- my-eval" exp)))
+        (cond? exp) (eval (cond->if exp) env)
+        (application? exp) (apply (eval (operator exp) env)
+                                  (list-of-values (operands exp) env))
+        :else (err/error "unknown expression type -- eval" exp)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; my-apply
-(defn my-apply [procedure arguments]
+;; apply
+(defn apply [procedure arguments]
   (cond (primitive-procedure? procedure)
         (apply-primitive-procedure procedure arguments)
         (compound-procedure? procedure)
@@ -70,10 +68,10 @@
           (env/extend-environment (procedure-parameters procedure)
                                   arguments
                                   (procedure-environment procedure)))
-        :else (err/error "unknown procedure type -- my-apply" procedure)))
+        :else (err/error "unknown procedure type -- apply" procedure)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; for my-eval
+;; for eval
 (defn self-evaluating? [exp]
   (cond (number? exp) true
         (string? exp) true
@@ -118,30 +116,30 @@
 
 (defn eval-assignment [exp env]
   (set-variable-value! (assignment-variable exp)
-                       (my-eval (assignment-value exp) exp)
+                       (eval (assignment-value exp) exp)
                        env))
 
 (defn eval-definition [exp env]
   (let [definition-name (definition-variable exp)]
     (do
       (define-variable! definition-name
-                        (my-eval (definition-value exp) env)
+                        (eval (definition-value exp) env)
                         env)
       (str definition-name " defined"))))
 
 (defn eval-if [exp env]
-  (if (my-eval (if-predicate exp) env)
-    (my-eval (if-consequent exp) env)
-    (my-eval (if-alternative exp) env)))
+  (if (eval (if-predicate exp) env)
+    (eval (if-consequent exp) env)
+    (eval (if-alternative exp) env)))
 
 (defn make-procedure [parameters body env]
   (list 'procedure parameters body env))
 
 (defn eval-sequence [exps env]
   (if (last-exp? exps)
-    (my-eval (first-exp exps) env)
+    (eval (first-exp exps) env)
     (do
-      (my-eval (first-exp exps) env)
+      (eval (first-exp exps) env)
       (eval-sequence (rest-exps exps) env))))
 
 (defn cond->if [exp]
@@ -156,7 +154,7 @@
 (defn list-of-values [exps env]
   (if (no-operands? exps)
     '()
-    (cons (my-eval (first-operand exps) env)
+    (cons (eval (first-operand exps) env)
           (list-of-values (rest-operands exps) env))))
 
 (defn set-variable-value! [variable value env]
@@ -211,7 +209,7 @@
       (if (cond-else-clause? first)
         (if (empty? rest)
           (sequence->exp (cond-actions first))
-          (err/error "'else' clause isn't last -- cond->if expand-clauses" clauses) )
+          (err/error "'else' clause isn't last -- cond->if expand-clauses" clauses))
         (make-if (cond-predicate first)
                  (sequence->exp (cond-actions first))
                  (expand-clauses rest))))))
@@ -242,7 +240,7 @@
 (defn rest-operands [args] (rest args))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; for my-apply
+;; for apply
 (defn primitive-procedure? [proc] (tagged-list? proc 'primitive))
 
 (defn apply-primitive-procedure [proc args]
@@ -254,3 +252,42 @@
 (defn primitive-implementation [proc] (stf/second proc))
 (defn procedure-environment [p] (stf/fourth p))
 (defn procedure-parameters [p] (stf/second p))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; code to interact with the evaluator:
+(def input-prompt "@input")
+(def output-prompt "@value")
+
+(defn driver-loop []
+  (prompt-for-input input-prompt)
+  (let [input (read)]
+    (user-print input)
+    (let [output (eval input the-global-environment)]
+      (announce-output output-prompt)
+      (user-print output)))
+  (driver-loop))
+
+(defn prompt-for-input [string]
+  (newline) (println string) (newline))
+
+(defn announce-output [string]
+  (newline) (println string) (newline))
+
+(defn user-print [object]
+  (if (compound-procedure? object)
+    (println (list 'compound-procedure
+                   (procedure-parameters object)
+                   (procedure-body object)
+                   '<procedure-env>))
+    (println object)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(def the-global-environment (env/setup-environment))
+
+;; test; see main.clj for real call to driver loop
+;;(comment
+  ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;; meta-circular-evaluator loaded
+  'METACIRCULAR-EVALUATOR-LOADED
+  (driver-loop)
+;;)
