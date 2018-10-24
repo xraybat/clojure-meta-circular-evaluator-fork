@@ -18,6 +18,7 @@
          operator operands begin-actions no-operands? first-operand
          rest-operands
          last-exp? first-exp rest-exps
+         first-frame frame-variables frame-values add-binding-to-frame!
          set-variable-value! assignment-variable assignment-value
          define-variable! definition-variable definition-value
          if-predicate if-consequent if-alternative cond-predicate
@@ -94,7 +95,6 @@
 (defn false? [x] (= x false))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
 (defn tagged-list? [exp tag]
   (and (list? exp) (= (first exp) tag)))
 
@@ -108,7 +108,7 @@
                         (env-loop (env/enclosing-environment env))))]
               (if (= env env/the-empty-environment)
                 (err/error "unbound variable -- lookup-variable-value" variable)
-                (let [frame (env/first-frame env)]
+                (let [frame (first-frame env)]
                   (scan @frame)))))]
     (env-loop env)))
 
@@ -165,14 +165,14 @@
                         (env-loop (env/enclosing-environment env))))]
               (if (= env env/the-empty-environment)
                 (err/error "unbound variable -- set-variable-value!" variable)
-                (scan (env/first-frame env)))))]
+                (scan (first-frame env)))))]
     (env-loop env)))
 
 (defn assignment-variable [exp] (stf/second exp))
 (defn assignment-value [exp] (stf/third exp))
 
 (defn define-variable! [variable value env]
-  (swap! (env/first-frame env) assoc variable value))
+  (swap! (first-frame env) assoc variable value))
 
 (defn definition-variable [exp]
   (if (symbol? (stf/second exp))
@@ -199,6 +199,13 @@
 (defn last-exp? [seq] (empty? (rest seq)))
 (defn first-exp [seq] (first seq))
 (defn rest-exps [seq] (rest seq))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; frame stuff
+(defn first-frame [env] (first env))
+(defn frame-variables [frame] (keys @frame))
+(defn frame-values [frame] (vals @frame))
+(defn add-binding-to-frame! [var val frame] (swap! frame assoc var val))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn expand-clauses [clauses]

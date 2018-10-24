@@ -21,10 +21,10 @@
   (my-driver-loop))
 
 (defn prompt-for-input [string]
-  (newline) (println string) (newline))                     ;;??extra newline??
+  (newline) (println string))                     ;;??extra newline??
 
 (defn announce-output [string]
-  (newline) (println string) (newline))                     ;;??extra newline??
+  (newline) (println string))                     ;;??extra newline??
 
 (defn user-print [object]
     (println "user-print: " object))
